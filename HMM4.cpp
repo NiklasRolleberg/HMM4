@@ -165,6 +165,7 @@ int main(int argc, char **argv)
 	matrix A = matrix(board[0]);
 	matrix B = matrix(board[1]);
 	matrix q = matrix(board[2]);
+	std::vector<int> seq;
 
 	//Felkoll
 
@@ -186,24 +187,87 @@ int main(int argc, char **argv)
 	std::istringstream iss;
 	iss.str(board[3]);
 	iss >> Nstates;
-	iss >> index;
-
-	matrix L = q&B.getCol(index).transpose();
-	//L.print();
-	for(int i=1;i<Nstates;++i)
+	for(int i=0;i<Nstates;++i)
 	{
 		iss >> index;
-		//matrix T = B.getCol(index).transpose();
-		L = (L*A)&(B.getCol(index).transpose());
-		//L.print();
+		seq.push_back(index);
+	}
+	
+	
+	//forward
+	
+	//matrix with all alpha values
+	matrix alpha = matrix(A.initialize(B.row,Nstates),B.row,Nstates);
+	
+	matrix L = q&B.getCol(seq[0]).transpose();
+	
+	for(int j=0;j<B.row;++j)
+			alpha.m[j][0] = L.get(0,j);
+			
+	for(int i=1;i<Nstates;++i)
+	{
+		L = (L*A)&(B.getCol(seq[i]).transpose());
+		
+		for(int j=0;j<B.row;++j)
+			alpha.m[j][i] = L.get(0,j);
 	}
 
 	//sum the elements in L
-	double m = 0;
+	double sumA = 0;
 	for(int i=0;i<L.col;++i)
-            m += L.get(0,i);
-	double t = round(m*pow(10,6))/pow(10,6);
-	std::cout << t << std::endl;
+            sumA += L.get(0,i);
+	std::cout << "Forward: " << sumA << std::endl;
+	
+	//Backward
+	
+	//matrx with all beta values
+	matrix beta = matrix(A.initialize(A.row,Nstates),A.row,Nstates);
+	
+	double** temp = A.initialize(1,A.col);
+	for(int i=0;i<A.col;++i)
+		temp[0][i] = 1.0;
+		
+	matrix b = matrix(temp,1,A.col);
+	for(int j=0;j<B.row;++j)
+			beta.m[j][Nstates-1] = b.get(0,j);
+			
+	for(int k=Nstates-2;k>=0;--k)
+	{
+		//b = (A*B.getCol(seq[k])).transpose()&b; //antagligen fel
+		
+		for(int i=0;i<A.col;++i)
+		{
+			double temp = 0;
+			for(int j=0;j<A.row;++j)
+				temp += A.get(i,j) * B.get(j,seq[k]) * b.get(0,j);
+			
+			b.m[0][i] = temp;
+		}
+		
+		for(int j=0;j<B.row;++j)
+			beta.m[j][k] = b.get(0,j);		
+	}
+	std::cout << "Backward: ";
+	b.print();
+	
+	std::cout << "\nresten\n" <<std::endl;
+	alpha.print();
+	std::cout <<"\n"<<std::endl;
+	beta.print();
+	
+	//Di-gamma
+	matrix diGamma(A.initialize(A.row,A.col),A.row,A.col);
+	
+	int t = 0;
+	
+	for(int i=0;i<A.row;++i)
+	{
+		for(int j=0;j<A.col;++j)
+			diGamma.m[i][j] = (alpha.get(i,t) * A.get(i,j) * B.get(j,t+1))/sumA;
+	}
+	
+	std::cout << "\ndi-gamma\n" << std::endl;
+	diGamma.print();
 	return 0;
 }
 
