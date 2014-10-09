@@ -22,7 +22,7 @@ data init(std::string in)
 	std::istringstream iss;
 	iss.str(in);
 	iss >> temp.row >> temp.col;
-	
+
 	temp.matris = initialize(temp.row,temp.col);
 
 	for(int i=0;i<temp.row;++i)
@@ -47,11 +47,11 @@ int main(int argc, char **argv)
 	int T;
 	int M;
 	int N;
-	
-	int MaxItter = 100;
+
+	int MaxItter = 30;
 	int itter = 0;
 	double OldLogProb = -std::numeric_limits<double>::max();
-	
+
 	// Read the file
 	std::vector<std::string> board;
 	for (std::string line; std::getline(std::cin, line);)
@@ -61,16 +61,16 @@ int main(int argc, char **argv)
 	data temp = init(board[0]);
 	double** A = temp.matris;
 	N = temp.row;
-	
+
 	temp = init(board[1]);
 	double** B = temp.matris;
 	M = temp.col;
-	
+
 	temp = init(board[2]);
 	double* q = temp.matris[0];
-	
+
 	std::vector<int> seq;
-	
+
 	int index;
 	std::istringstream iss;
 	iss.str(board[3]);
@@ -80,7 +80,7 @@ int main(int argc, char **argv)
 		iss >> index;
 		seq.push_back(index);
 	}
-	
+
 	//variabler som går att återanvända
 	double* c = (double*) calloc(T,sizeof(double)); //c[time]
 	double** alpha = initialize(T, N);  //alpha[time][index]
@@ -89,38 +89,16 @@ int main(int argc, char **argv)
 	double*** diGamma = (double***)calloc(T,sizeof(double**)); //diGamma[time][index1][index2]
 	for(int t=0;t<T;++t)
 		diGamma[t] = initialize(N,N);
-	
-	/*Felkoll
-	std::cout << "A" << std::endl;
-	for(int i=0;i<N;++i)
-	{
-		for(int j=0;j<N;++j)
-			std::cout << A[i][j] << " ";
-		std::cout<<std::endl;
-	}
-	
-	std::cout << "\nB" << std::endl;
-	for(int i=0;i<N;++i)
-	{
-		for(int j=0;j<M;++j)
-			std::cout << B[i][j] << " ";
-		std::cout<<std::endl;
-	}
-	
-	std::cout << "\nq" << std::endl;
-	for(int i=0;i<N;++i)
-		std::cout << q[i] << " ";
-	*/
-	
+
 	bool GO = true;
 	while((itter < MaxItter) && GO)
 	{
-		
+
 		/**----------Alpha-pass------------------------*/
-		
+
 		//alpha-0
 		c[0] = 0;
-		
+
 		for(int i=0;i<N;++i)
 		{
 			alpha[0][i] = q[i]*B[i][seq[0]];
@@ -132,7 +110,7 @@ int main(int argc, char **argv)
 		{
 			alpha[0][i] *= c[0];
 		}
-		
+
 		//alpha-t
 		for(int t=1;t<T;++t)
 		{
@@ -142,12 +120,12 @@ int main(int argc, char **argv)
 				alpha[t][i] = 0;
 				for(int j=0;j<N;++j)
 				{
-					alpha[t][i] += alpha[t-1][j]*A[i][j];
+					alpha[t][i] += alpha[t-1][j]*A[j][i];
 				}
 				alpha[t][i] *= B[i][seq[t]];
 				c[t] += alpha[t][i];
 			}
-			
+
 			//scale
 			c[t] = 1.0/c[t];
 			for(int i=0;i<N;++i)
@@ -155,16 +133,13 @@ int main(int argc, char **argv)
 				alpha[t][i] *= c[t];
 			}
 		}
-		
-		/*for(int i=0;i<N;++i)
-			std::cout << alpha[T-1][i] << " ";*/
-			
+
 		/**----------Beta-pass------------------------*/
-		
+
 		//beta T-1
 		for(int i=0;i<N;++i)
 			beta[T-1][i] = c[T-1];
-			
+
 		for(int t=T-2; t>=0;--t)
 		{
 			for(int i=0;i<N;++i)
@@ -172,23 +147,23 @@ int main(int argc, char **argv)
 				beta[t][i] = 0;
 				for(int j=0;j<N;++j)
 				{
-					beta[t][i] += A[i][j] * B[j][seq[t]] * beta[t+1][j];
+					beta[t][i] += A[i][j] * B[j][seq[t+1]] * beta[t+1][j];
 				}
 				//scale
 				beta[t][i] *= c[t];
 			}
 		}
-		
-		
+
+
 		/**----------diGamma & Gamma----------------*/
-		
+
 		for(int t=0;t<(T-1);++t)
 		{
 			double denom = 0;
 			for(int i=0;i<N;++i)
 				for(int j=0;j<N;++j)
 					denom += alpha[t][i] * A[i][j] * B[j][seq[t+1]] * beta[t+1][j];
-			
+
 			for(int i=0;i<N;++i)
 			{
 				Gamma[t][i] = 0;
@@ -198,15 +173,20 @@ int main(int argc, char **argv)
 					Gamma[t][i] += diGamma[t][i][j];
 				}
 			}
-	
+
 		}
-		
+
 		/**----------Estimate A,b,q------------------*/
-		
+
+
+        int digits = 5;
+
 		/*q*/
 		for(int i=0;i<N;++i)
-			q[i] = Gamma[0][i];
-		
+            q[i] = Gamma[0][i];
+
+        //q[i] = round(Gamma[0][i]*pow(10,digits))/pow(10,digits);
+
 		/*A*/
 		for(int i=0;i<N;++i)
 		{
@@ -219,7 +199,8 @@ int main(int argc, char **argv)
 					numer += diGamma[t][i][j];
 					denom += Gamma[t][i];
 				}
-			A[i][j] = numer/denom;
+            //A[i][j] = numer/denom;
+			A[i][j] = round((numer/denom)*pow(10,digits))/pow(10,digits);
 			}
 		}
 
@@ -236,38 +217,42 @@ int main(int argc, char **argv)
 						numer += Gamma[t][i];
 					denom += Gamma[t][i];
 				}
-			B[i][j] = numer/denom;
+			//B[i][j] = numer/denom;
+			B[i][j] = round((numer/denom)*pow(10,digits))/pow(10,digits);
 			}
 		}
-		
+
 		double logProb = 0;
 		for(int t=0;t<T;++t)
 			logProb += log(c[t]);
 		logProb *= -1;
-		
-		if(logProb < OldLogProb)
+
+        //std::cout << "logProb: " << logProb <<std::endl;
+        //std::cout << "OldLogProb: " << OldLogProb <<std::endl;
+
+		if(logProb <= OldLogProb)
 		{
 			GO = false;
-			break;
 		}
-		
+
 		OldLogProb = logProb;
 		itter++;
 	}
-	
-	std::cout << "Iterations " << itter << std::endl;
-	
+
+	//std::cout << "Iterations " << itter << std::endl;
+
 	//Print matrix
+
 	std::cout << N << " " << N;
 	for(int i=0;i<N;++i)
 		for(int j=0;j<N;++j)
 			std::cout << " " << A[i][j];
-	
+
 	std::cout << "\n" << N << " " << M;
 	for(int i=0;i<N;++i)
 		for(int j=0;j<M;++j)
 			std::cout << " " << B[i][j];
 	std::cout << std::endl;
-	
+
 	return 0;
 }
